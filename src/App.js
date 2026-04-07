@@ -76,8 +76,7 @@ const getBestPlacementMove = (board, player) => {
 // ============= COMPONENTS =============
 const GameBoard = ({ gameState, playerSymbol, onMove }) => {
   const [animatingPositions, setAnimatingPositions] = useState(new Set());
-  
-  // Safety guard (must come AFTER the useState hook to obey React Rules of Hooks)
+
   if (!gameState || !gameState.board) {
     return (
       <div className="game-board-container" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.1rem', color: '#a1a9c3' }}>
@@ -87,28 +86,56 @@ const GameBoard = ({ gameState, playerSymbol, onMove }) => {
   }
 
   const handlePositionClick = (position) => {
-    if (gameState?.gameOver || gameState?.currentPlayer !== playerSymbol) return;
+    console.log('🟢 Click attempt:', {
+      position,
+      gameOver: gameState.gameOver,
+      currentPlayer: gameState.currentPlayer,
+      mySymbol: playerSymbol,
+      isMyTurn: gameState.currentPlayer === playerSymbol,
+      placementCount: gameState.placementCount,
+      selected: gameState.selected,
+      pieceAtPos: gameState.board[position],
+    });
 
-    const isPlacing = gameState?.placementCount?.[playerSymbol] < 3;
-    
+    if (gameState.gameOver) {
+      console.log('🔴 Click blocked: game over');
+      return;
+    }
+    if (gameState.currentPlayer !== playerSymbol) {
+      console.log('🔴 Click blocked: not your turn');
+      return;
+    }
+
+    const isPlacing = gameState.placementCount[playerSymbol] < 3;
+    console.log('🟡 isPlacing phase?', isPlacing);
+
     if (isPlacing) {
-      if (gameState?.board?.[position] === null) {
+      if (gameState.board[position] === null) {
         setAnimatingPositions(new Set([position]));
         setTimeout(() => setAnimatingPositions(new Set()), 400);
         onMove({ type: 'place', position });
+      } else {
+        console.log('🔴 Place blocked: position not empty');
       }
     } else {
-      if (gameState?.selected === null) {
-        if (gameState?.board?.[position] === playerSymbol) {
+      if (gameState.selected === null) {
+        if (gameState.board[position] === playerSymbol) {
           onMove({ type: 'select', position });
+        } else {
+          console.log('🔴 Select blocked: not your piece');
         }
       } else {
-        if (position === gameState?.selected) {
+        if (position === gameState.selected) {
           onMove({ type: 'select', position: null });
-        } else if (gameState?.board?.[position] === null && ADJ[gameState?.selected]?.includes(position)) {
+        } else if (gameState.board[position] === null && ADJ[gameState.selected]?.includes(position)) {
           setAnimatingPositions(new Set([position]));
           setTimeout(() => setAnimatingPositions(new Set()), 400);
           onMove({ type: 'move', position });
+        } else {
+          console.log('🔴 Move blocked: invalid destination', {
+            empty: gameState.board[position] === null,
+            adjacent: ADJ[gameState.selected]?.includes(position)
+          });
         }
       }
     }
@@ -128,8 +155,8 @@ const GameBoard = ({ gameState, playerSymbol, onMove }) => {
 
   return (
     <div className="game-board-container">
-      <svg 
-        className="board-lines" 
+      <svg
+        className="board-lines"
         viewBox="0 0 620 620"
         style={{ backgroundColor: 'rgba(234, 179, 8, 0.2)' }}
       >
@@ -147,7 +174,7 @@ const GameBoard = ({ gameState, playerSymbol, onMove }) => {
         const isPlacingPhaseForMe = gameState.placementCount[playerSymbol] < 3;
 
         let canClick = !gameState.gameOver && isCurrentPlayerTurn;
-        
+
         if (canClick) {
           if (isPlacingPhaseForMe) {
             canClick = (piece === null);
@@ -155,22 +182,26 @@ const GameBoard = ({ gameState, playerSymbol, onMove }) => {
             if (gameState.selected === null) {
               canClick = (piece === playerSymbol);
             } else {
-              canClick = (pos === gameState.selected) || 
+              canClick = (pos === gameState.selected) ||
                         (piece === null && ADJ[gameState.selected] && ADJ[gameState.selected].includes(pos));
             }
           }
         }
 
-        const showMoveIndicator = !piece && 
-                                 gameState.selected !== null && 
-                                 ADJ[gameState.selected] && 
+        if (isCurrentPlayerTurn) {
+          console.log(`🟠 Position ${pos} canClick: ${canClick} (piece: ${piece}, selected: ${gameState.selected})`);
+        }
+
+        const showMoveIndicator = !piece &&
+                                 gameState.selected !== null &&
+                                 ADJ[gameState.selected] &&
                                  ADJ[gameState.selected].includes(pos);
 
         return (
           <button
             key={pos}
-            className={`board-position ${piece ? `has-piece piece-${piece}` : ''} 
-              ${isSelected ? 'selected' : ''} 
+            className={`board-position ${piece ? `has-piece piece-${piece}` : ''}
+              ${isSelected ? 'selected' : ''}
               ${isAnimating ? 'animating' : ''}
               ${canClick ? 'clickable' : ''}`}
             style={getPositionStyle(pos)}
@@ -186,176 +217,11 @@ const GameBoard = ({ gameState, playerSymbol, onMove }) => {
   );
 };
 
-// const GameScreen = ({ roomId, playerName, playerSymbol, onLeave, isVsAI = false }) => {
-//   const [gameState, setGameState] = useState(null);
-//   const [soundEnabled, setSoundEnabled] = useState(true);
-//   const [copied, setCopied] = useState(false);
-
-//   const handleMove = useCallback((move) => {
-//     gameService.makeMove(roomId, move);
-//   }, [roomId]);
-
-//   useEffect(() => {
-//     if (!isVsAI || !gameState || !gameState.board || gameState.gameOver || gameState.currentPlayer !== 'O') return;
-//     if (gameState.selected !== null) return;
-
-//     const timer = setTimeout(() => {
-//       const board = { ...gameState.board };
-//       const isPlacing = (gameState.placementCount?.O ?? 0) < 3;
-
-//       if (isPlacing) {
-//         const bestPos = getBestPlacementMove(board, 'O');
-//         if (bestPos) handleMove({ type: 'place', position: bestPos });
-//       } else {
-//         let bestScore = -Infinity;
-//         let bestFrom = null;
-//         let bestTo = null;
-
-//         for (let from = 1; from <= 9; from++) {
-//           if (board[from] !== 'O') continue;
-//           for (let to of ADJ[from]) {
-//             if (board[to] !== null) continue;
-//             const tempBoard = { ...board };
-//             tempBoard[from] = null;
-//             tempBoard[to] = 'O';
-//             const score = minimax(tempBoard, 0, false, 'O', 'X');
-//             if (score > bestScore) {
-//               bestScore = score;
-//               bestFrom = from;
-//               bestTo = to;
-//             }
-//           }
-//         }
-//         if (bestFrom && bestTo) {
-//           handleMove({ type: 'select', position: bestFrom });
-//           setTimeout(() => handleMove({ type: 'move', position: bestTo }), 80);
-//         }
-//       }
-//     }, 650);
-
-//     return () => clearTimeout(timer);
-//   }, [gameState, isVsAI, handleMove]);
-
-//   useEffect(() => {
-//     if (!roomId) return;
-//     const unsubscribe = gameService.subscribeToRoom(roomId, setGameState);
-//     return unsubscribe;
-//   }, [roomId]);
-
-//   const handleReset = () => gameService.resetGame(roomId);
-
-//   const copyRoomId = () => {
-//     navigator.clipboard.writeText(roomId);
-//     setCopied(true);
-//     setTimeout(() => setCopied(false), 2000);
-//   };
-
-//   if (!gameState || !gameState.board) return <div className="loading-screen">Loading game...</div>;
-
-//   const opponent = gameState.players?.find(p => p.symbol !== playerSymbol);
-//   const isMyTurn = gameState.currentPlayer === playerSymbol;
-//   const isPlacing = (gameState.placementCount?.[gameState.currentPlayer] ?? 0) < 3;
-
-//   return (
-//     <div className="game-screen">
-//       <div className="game-header">
-//         <button className="icon-btn" onClick={onLeave}><Home size={20} /></button>
-        
-//         <div className="room-code" onClick={copyRoomId}>
-//           <span className="room-label">{isVsAI ? 'Solo vs AI' : 'Room'}</span>
-//           <span className="room-id">{isVsAI ? 'AI Bot' : roomId}</span>
-//           {!isVsAI && (copied ? <Check size={16} /> : <Copy size={16} />)}
-//         </div>
-
-//         <button className="icon-btn" onClick={() => setSoundEnabled(!soundEnabled)}>
-//           {soundEnabled ? <Volume2 size={20} /> : <VolumeX size={20} />}
-//         </button>
-//       </div>
-
-//       <div className="players-bar">
-//         <div className={`player-card ${playerSymbol === 'X' ? 'active' : ''} ${gameState.currentPlayer === 'X' ? 'turn' : ''}`}>
-//           <div className="player-symbol">X</div>
-//           <div className="player-info">
-//             <div className="player-name">{gameState.players?.[0]?.name || 'Player X'}</div>
-//             <div className="player-pieces">{gameState.placementCount?.X ?? 0}/3 placed</div>
-//           </div>
-//         </div>
-//         <div className={`player-card ${playerSymbol === 'O' ? 'active' : ''} ${gameState.currentPlayer === 'O' ? 'turn' : ''}`}>
-//           <div className="player-symbol">O</div>
-//           <div className="player-info">
-//             <div className="player-name">{isVsAI ? '🤖 AI Bot' : (opponent?.name || 'Waiting...')}</div>
-//             <div className="player-pieces">{gameState.placementCount?.O ?? 0}/3 placed</div>
-//           </div>
-//         </div>
-//       </div>
-
-//       {!gameState.gameOver && (gameState.players?.length ?? 0) < 2 && !isVsAI && (
-//         <div className="status-message waiting">
-//           <Users size={20} /> Waiting for opponent to join...
-//         </div>
-//       )}
-
-//       {!gameState.gameOver && ((gameState.players?.length ?? 0) === 2 || isVsAI) && (
-//         <div className={`status-message ${isMyTurn ? 'your-turn' : 'opponent-turn'}`}>
-//           {isMyTurn ? (
-//             <>
-//               <Play size={20} />
-//               Your turn • {isPlacing ? 'Place a piece' : 'Move along the roads'}
-//             </>
-//           ) : (
-//             <>
-//               <AlertCircle size={20} />
-//               {isVsAI ? "AI is thinking..." : "Opponent's turn"}
-//             </>
-//           )}
-//         </div>
-//       )}
-
-//       <GameBoard 
-//         gameState={gameState} 
-//         playerSymbol={playerSymbol}
-//         onMove={handleMove}
-//       />
-
-//       {gameState.gameOver && (
-//         <div className="game-over-overlay">
-//           <div className="game-over-content">
-//             {gameState.winner ? (
-//               <>
-//                 <div className={`winner-symbol symbol-${gameState.winner}`}>
-//                   {gameState.winner}
-//                 </div>
-//                 <h2 className="game-over-title">
-//                   {gameState.winner === playerSymbol ? 'You Win!' : (isVsAI ? 'AI Wins' : 'You Lose')}
-//                 </h2>
-//                 <p className="game-over-subtitle">
-//                   {gameState.winner === playerSymbol ? 'Excellent strategy!' : 'Better luck next time'}
-//                 </p>
-//               </>
-//             ) : (
-//               <>
-//                 <div className="draw-icon">⚡</div>
-//                 <h2 className="game-over-title">Draw</h2>
-//                 <p className="game-over-subtitle">No legal moves remaining</p>
-//               </>
-//             )}
-//             <div className="game-over-actions">
-//               <button className="btn btn-primary" onClick={handleReset}>Play Again</button>
-//               <button className="btn btn-secondary" onClick={onLeave}>Back to Menu</button>
-//             </div>
-//           </div>
-//         </div>
-//       )}
-//     </div>
-//   );
-// };
-
 const GameScreen = ({ roomId, playerName, playerSymbol, onLeave, isVsAI = false }) => {
   const [gameState, setGameState] = useState(null);
   const [soundEnabled, setSoundEnabled] = useState(true);
   const [copied, setCopied] = useState(false);
 
-  // ============= DEBUG LOGGING =============
   console.log('🎮 GameScreen RENDER:', {
     roomId,
     playerSymbol,
@@ -376,6 +242,7 @@ const GameScreen = ({ roomId, playerName, playerSymbol, onLeave, isVsAI = false 
     };
   }, [roomId]);
 
+  // AI move effect (for vs AI games)
   useEffect(() => {
     if (!isVsAI || !gameState || !gameState.board || gameState.gameOver || gameState.currentPlayer !== 'O') return;
     if (gameState.selected !== null) return;
@@ -417,60 +284,29 @@ const GameScreen = ({ roomId, playerName, playerSymbol, onLeave, isVsAI = false 
     return () => clearTimeout(timer);
   }, [gameState, isVsAI, handleMove]);
 
-  // useEffect(() => {
-  //   if (!roomId) {
-  //     console.log('🎮 No roomId, skipping subscription');
-  //     return;
-  //   }
-
-  //   console.log('🎮 Setting up subscription for room:', roomId);
-  //   const unsubscribe = gameService.subscribeToRoom(roomId, (data) => {
-  //     console.log('🎮 Subscription callback received data:', data);
-  //     console.log('🎮 Data.board exists?', !!data?.board);
-  //     setGameState(data);
-  //   });
-
-  //   return () => {
-  //     console.log('🎮 Cleaning up subscription for room:', roomId);
-  //     unsubscribe();
-  //   };
-  // }, [roomId]);
-
+  // Single subscription to room
   useEffect(() => {
-  if (!roomId) {
-    console.log('🎮 No roomId, skipping subscription');
-    return;
-  }
-
-  console.log('🎮 Setting up subscription for room:', roomId);
-  const unsubscribe = gameService.subscribeToRoom(roomId, (data) => {
-    console.log('🎮 Subscription callback received data:', data);
-    console.log('🎮 Data keys:', data ? Object.keys(data) : null);
-    console.log('🎮 Data.board exists?', !!data?.board);
-    
-    // TEMPORARY FIX: If board is missing, reconstruct it
-    if (data && !data.board) {
-      console.warn('⚠️ Board field missing! Reconstructing default board.');
-      data.board = {
-        1: null, 2: null, 3: null,
-        4: null, 5: null, 6: null,
-        7: null, 8: null, 9: null
-      };
-      // Ensure other required fields exist
-      if (!data.placementCount) data.placementCount = { X: 0, O: 0 };
-      if (!data.selected) data.selected = null;
-      if (data.gameOver === undefined) data.gameOver = false;
-      if (data.winner === undefined) data.winner = null;
+    if (!roomId) {
+      console.log('🎮 No roomId, skipping subscription');
+      return;
     }
-    
-    setGameState(data);
-  });
 
-  return () => {
-    console.log('🎮 Cleaning up subscription for room:', roomId);
-    unsubscribe();
-  };
-}, [roomId]);
+    console.log('🎮 Setting up subscription for room:', roomId);
+    const unsubscribe = gameService.subscribeToRoom(roomId, (data) => {
+      console.log('🎮 Subscription callback received data:', data);
+      if (data) {
+        console.log('🎮 Data keys:', Object.keys(data));
+        console.log('🎮 Data.board exists?', !!data?.board);
+        console.log('🎮 placementCount:', data.placementCount);
+      }
+      setGameState(data);
+    });
+
+    return () => {
+      console.log('🎮 Cleaning up subscription for room:', roomId);
+      unsubscribe();
+    };
+  }, [roomId]);
 
   const handleReset = () => {
     console.log('🎮 Reset game requested');
@@ -483,11 +319,6 @@ const GameScreen = ({ roomId, playerName, playerSymbol, onLeave, isVsAI = false 
     setTimeout(() => setCopied(false), 2000);
   };
 
-  // ============= TEMPORARILY BYPASS LOADING CHECK TO DEBUG =============
-  // Comment out the loading guard to see if the board renders with data
-  // if (!gameState || !gameState.board) return <div className="loading-screen">Loading game...</div>;
-
-  // If we keep the guard, add a fallback after timeout
   if (!gameState || !gameState.board) {
     console.log('🎮 Rendering loading screen because gameState or board is missing');
     return <div className="loading-screen">Loading game... (check console)</div>;
@@ -503,7 +334,7 @@ const GameScreen = ({ roomId, playerName, playerSymbol, onLeave, isVsAI = false 
     <div className="game-screen">
       <div className="game-header">
         <button className="icon-btn" onClick={onLeave}><Home size={20} /></button>
-        
+
         <div className="room-code" onClick={copyRoomId}>
           <span className="room-label">{isVsAI ? 'Solo vs AI' : 'Room'}</span>
           <span className="room-id">{isVsAI ? 'AI Bot' : roomId}</span>
@@ -554,8 +385,9 @@ const GameScreen = ({ roomId, playerName, playerSymbol, onLeave, isVsAI = false 
         </div>
       )}
 
-      <GameBoard 
-        gameState={gameState} 
+      <GameBoard
+        key={playerSymbol}
+        gameState={gameState}
         playerSymbol={playerSymbol}
         onMove={handleMove}
       />
@@ -850,14 +682,14 @@ export default function AlignmentGame() {
       `}</style>
 
       {screen === 'menu' ? (
-        <MenuScreen 
-          onCreateRoom={handleCreateRoom} 
+        <MenuScreen
+          onCreateRoom={handleCreateRoom}
           onJoinRoom={handleJoinRoom}
           onSolo={handleSolo}
         />
       ) : (
-        <GameScreen 
-          roomId={roomId} 
+        <GameScreen
+          roomId={roomId}
           playerName={playerName}
           playerSymbol={playerSymbol}
           onLeave={handleLeave}
