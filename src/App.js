@@ -23,16 +23,16 @@ const checkWin = (board, player) => {
   return WINNING_LINES.some(line => line.every(p => board[p] === player));
 };
 
-const hasLegalMove = (board, player) => {
-  for (let p = 1; p <= 9; p++) {
-    if (board[p] === player) {
-      for (let t of ADJ[p]) {
-        if (board[t] === null) return true;
-      }
-    }
-  }
-  return false;
-};
+// const hasLegalMove = (board, player) => {
+//   for (let p = 1; p <= 9; p++) {
+//     if (board[p] === player) {
+//       for (let t of ADJ[p]) {
+//         if (board[t] === null) return true;
+//       }
+//     }
+//   }
+//   return false;
+// };
 
 // ============= AI LOGIC =============
 const minimax = (board, depth, isMaximizing, aiPlayer, humanPlayer) => {
