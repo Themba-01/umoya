@@ -12,8 +12,10 @@ const firebaseConfig = {
   appId: "1:296322445838:web:996ec5769e278dd310425f"
 };
 
+console.log('🔥 Firebase: Initializing app...');
 const app = initializeApp(firebaseConfig);
 const database = getDatabase(app);
+console.log('🔥 Firebase: App initialized, database reference obtained');
 
 // ============= SHARED GAME HELPERS =============
 const ADJ = {
@@ -44,6 +46,7 @@ const hasLegalMove = (board, player) => {
 // ============= PRODUCTION FIREBASE GAME SERVICE =============
 export class FirebaseGameService {
   async createRoom(playerName) {
+    console.log(`🔥 createRoom: Starting with playerName="${playerName}"`);
     let roomId = '';
     let attempts = 0;
     const maxAttempts = 20;
@@ -55,6 +58,8 @@ export class FirebaseGameService {
       if (!snapshot.exists()) break;
       attempts++;
     }
+
+    console.log(`🔥 createRoom: Generated roomId=${roomId} after ${attempts} attempts`);
 
     const room = {
       id: roomId,
@@ -68,37 +73,86 @@ export class FirebaseGameService {
       createdAt: Date.now()
     };
 
-    await set(ref(database, `rooms/${roomId}`), room);
+    try {
+      await set(ref(database, `rooms/${roomId}`), room);
+      console.log(`🔥 createRoom: Room ${roomId} successfully written to Firebase`);
+    } catch (error) {
+      console.error(`🔥 createRoom: Failed to write room:`, error);
+      throw error;
+    }
     return roomId;
   }
 
   async joinRoom(roomId, playerName) {
+    console.log(`🔥 joinRoom: Attempting to join room ${roomId} as "${playerName}"`);
     const roomRef = ref(database, `rooms/${roomId}`);
     const snapshot = await get(roomRef);
 
-    if (!snapshot.exists()) throw new Error('Room not found');
+    if (!snapshot.exists()) {
+      console.error(`🔥 joinRoom: Room ${roomId} not found`);
+      throw new Error('Room not found');
+    }
 
     const room = snapshot.val();
-    if (room.players.length >= 2) throw new Error('Room is full');
+    console.log(`🔥 joinRoom: Room data:`, room);
+    
+    if (room.players.length >= 2) {
+      console.error(`🔥 joinRoom: Room ${roomId} is full`);
+      throw new Error('Room is full');
+    }
 
     room.players.push({ name: playerName, symbol: 'O' });
-    await set(roomRef, room);
+    
+    try {
+      await set(roomRef, room);
+      console.log(`🔥 joinRoom: Successfully joined room ${roomId}`);
+    } catch (error) {
+      console.error(`🔥 joinRoom: Failed to update room:`, error);
+      throw error;
+    }
     return true;
   }
 
-  subscribeToRoom(roomId, callback) {
+  async getRoom(roomId) {
+    console.log(`🔥 getRoom: Fetching room ${roomId}`);
     const roomRef = ref(database, `rooms/${roomId}`);
-    return onValue(roomRef, (snapshot) => {
-      if (snapshot.exists()) {
-        callback(snapshot.val());
+    const snapshot = await get(roomRef);
+    const exists = snapshot.exists();
+    console.log(`🔥 getRoom: Room ${roomId} exists? ${exists}`, exists ? snapshot.val() : null);
+    return exists ? snapshot.val() : null;
+  }
+
+  subscribeToRoom(roomId, callback) {
+    console.log(`🔥 subscribeToRoom: Setting up listener for room ${roomId}`);
+    const roomRef = ref(database, `rooms/${roomId}`);
+    const unsubscribe = onValue(roomRef,
+      (snapshot) => {
+        console.log(`🔥 subscribeToRoom: onValue triggered for ${roomId}, exists: ${snapshot.exists()}`);
+        if (snapshot.exists()) {
+          const data = snapshot.val();
+          console.log(`🔥 subscribeToRoom: Data received:`, data);
+          callback(data);
+        } else {
+          console.warn(`🔥 subscribeToRoom: Room ${roomId} does not exist in Firebase`);
+          callback(null);
+        }
+      },
+      (error) => {
+        console.error(`🔥 subscribeToRoom: Error for ${roomId}:`, error);
       }
-    });
+    );
+    console.log(`🔥 subscribeToRoom: Subscription active, unsubscribe function returned`);
+    return unsubscribe;
   }
 
   async makeMove(roomId, move) {
+    console.log(`🔥 makeMove: Room ${roomId}, move:`, move);
     const roomRef = ref(database, `rooms/${roomId}`);
     const snapshot = await get(roomRef);
-    if (!snapshot.exists()) return;
+    if (!snapshot.exists()) {
+      console.error(`🔥 makeMove: Room ${roomId} not found`);
+      return;
+    }
 
     const room = snapshot.val();
     const { board, placementCount, currentPlayer } = room;
@@ -140,13 +194,22 @@ export class FirebaseGameService {
       }
     }
 
-    await set(roomRef, room);
+    try {
+      await set(roomRef, room);
+      console.log(`🔥 makeMove: Move applied successfully`);
+    } catch (error) {
+      console.error(`🔥 makeMove: Failed to update room:`, error);
+    }
   }
 
   async resetGame(roomId) {
+    console.log(`🔥 resetGame: Resetting room ${roomId}`);
     const roomRef = ref(database, `rooms/${roomId}`);
     const snapshot = await get(roomRef);
-    if (!snapshot.exists()) return;
+    if (!snapshot.exists()) {
+      console.error(`🔥 resetGame: Room not found`);
+      return;
+    }
 
     const room = snapshot.val();
     room.board = Object.fromEntries([...Array(9)].map((_, i) => [i + 1, null]));
@@ -157,8 +220,8 @@ export class FirebaseGameService {
     room.winner = null;
 
     await set(roomRef, room);
+    console.log(`🔥 resetGame: Room reset`);
   }
 }
 
-// Export singleton instance
 export const gameService = new FirebaseGameService();

@@ -23,17 +23,6 @@ const checkWin = (board, player) => {
   return WINNING_LINES.some(line => line.every(p => board[p] === player));
 };
 
-// const hasLegalMove = (board, player) => {
-//   for (let p = 1; p <= 9; p++) {
-//     if (board[p] === player) {
-//       for (let t of ADJ[p]) {
-//         if (board[t] === null) return true;
-//       }
-//     }
-//   }
-//   return false;
-// };
-
 // ============= AI LOGIC =============
 const minimax = (board, depth, isMaximizing, aiPlayer, humanPlayer) => {
   if (checkWin(board, aiPlayer)) return 10 - depth;
@@ -88,26 +77,35 @@ const getBestPlacementMove = (board, player) => {
 const GameBoard = ({ gameState, playerSymbol, onMove }) => {
   const [animatingPositions, setAnimatingPositions] = useState(new Set());
   
-  const handlePositionClick = (position) => {
-    if (gameState.gameOver || gameState.currentPlayer !== playerSymbol) return;
+  // Safety guard (must come AFTER the useState hook to obey React Rules of Hooks)
+  if (!gameState || !gameState.board) {
+    return (
+      <div className="game-board-container" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.1rem', color: '#a1a9c3' }}>
+        Loading board...
+      </div>
+    );
+  }
 
-    const isPlacing = gameState.placementCount[playerSymbol] < 3;
+  const handlePositionClick = (position) => {
+    if (gameState?.gameOver || gameState?.currentPlayer !== playerSymbol) return;
+
+    const isPlacing = gameState?.placementCount?.[playerSymbol] < 3;
     
     if (isPlacing) {
-      if (gameState.board[position] === null) {
+      if (gameState?.board?.[position] === null) {
         setAnimatingPositions(new Set([position]));
         setTimeout(() => setAnimatingPositions(new Set()), 400);
         onMove({ type: 'place', position });
       }
     } else {
-      if (gameState.selected === null) {
-        if (gameState.board[position] === playerSymbol) {
+      if (gameState?.selected === null) {
+        if (gameState?.board?.[position] === playerSymbol) {
           onMove({ type: 'select', position });
         }
       } else {
-        if (position === gameState.selected) {
+        if (position === gameState?.selected) {
           onMove({ type: 'select', position: null });
-        } else if (gameState.board[position] === null && ADJ[gameState.selected].includes(position)) {
+        } else if (gameState?.board?.[position] === null && ADJ[gameState?.selected]?.includes(position)) {
           setAnimatingPositions(new Set([position]));
           setTimeout(() => setAnimatingPositions(new Set()), 400);
           onMove({ type: 'move', position });
@@ -188,22 +186,203 @@ const GameBoard = ({ gameState, playerSymbol, onMove }) => {
   );
 };
 
+// const GameScreen = ({ roomId, playerName, playerSymbol, onLeave, isVsAI = false }) => {
+//   const [gameState, setGameState] = useState(null);
+//   const [soundEnabled, setSoundEnabled] = useState(true);
+//   const [copied, setCopied] = useState(false);
+
+//   const handleMove = useCallback((move) => {
+//     gameService.makeMove(roomId, move);
+//   }, [roomId]);
+
+//   useEffect(() => {
+//     if (!isVsAI || !gameState || !gameState.board || gameState.gameOver || gameState.currentPlayer !== 'O') return;
+//     if (gameState.selected !== null) return;
+
+//     const timer = setTimeout(() => {
+//       const board = { ...gameState.board };
+//       const isPlacing = (gameState.placementCount?.O ?? 0) < 3;
+
+//       if (isPlacing) {
+//         const bestPos = getBestPlacementMove(board, 'O');
+//         if (bestPos) handleMove({ type: 'place', position: bestPos });
+//       } else {
+//         let bestScore = -Infinity;
+//         let bestFrom = null;
+//         let bestTo = null;
+
+//         for (let from = 1; from <= 9; from++) {
+//           if (board[from] !== 'O') continue;
+//           for (let to of ADJ[from]) {
+//             if (board[to] !== null) continue;
+//             const tempBoard = { ...board };
+//             tempBoard[from] = null;
+//             tempBoard[to] = 'O';
+//             const score = minimax(tempBoard, 0, false, 'O', 'X');
+//             if (score > bestScore) {
+//               bestScore = score;
+//               bestFrom = from;
+//               bestTo = to;
+//             }
+//           }
+//         }
+//         if (bestFrom && bestTo) {
+//           handleMove({ type: 'select', position: bestFrom });
+//           setTimeout(() => handleMove({ type: 'move', position: bestTo }), 80);
+//         }
+//       }
+//     }, 650);
+
+//     return () => clearTimeout(timer);
+//   }, [gameState, isVsAI, handleMove]);
+
+//   useEffect(() => {
+//     if (!roomId) return;
+//     const unsubscribe = gameService.subscribeToRoom(roomId, setGameState);
+//     return unsubscribe;
+//   }, [roomId]);
+
+//   const handleReset = () => gameService.resetGame(roomId);
+
+//   const copyRoomId = () => {
+//     navigator.clipboard.writeText(roomId);
+//     setCopied(true);
+//     setTimeout(() => setCopied(false), 2000);
+//   };
+
+//   if (!gameState || !gameState.board) return <div className="loading-screen">Loading game...</div>;
+
+//   const opponent = gameState.players?.find(p => p.symbol !== playerSymbol);
+//   const isMyTurn = gameState.currentPlayer === playerSymbol;
+//   const isPlacing = (gameState.placementCount?.[gameState.currentPlayer] ?? 0) < 3;
+
+//   return (
+//     <div className="game-screen">
+//       <div className="game-header">
+//         <button className="icon-btn" onClick={onLeave}><Home size={20} /></button>
+        
+//         <div className="room-code" onClick={copyRoomId}>
+//           <span className="room-label">{isVsAI ? 'Solo vs AI' : 'Room'}</span>
+//           <span className="room-id">{isVsAI ? 'AI Bot' : roomId}</span>
+//           {!isVsAI && (copied ? <Check size={16} /> : <Copy size={16} />)}
+//         </div>
+
+//         <button className="icon-btn" onClick={() => setSoundEnabled(!soundEnabled)}>
+//           {soundEnabled ? <Volume2 size={20} /> : <VolumeX size={20} />}
+//         </button>
+//       </div>
+
+//       <div className="players-bar">
+//         <div className={`player-card ${playerSymbol === 'X' ? 'active' : ''} ${gameState.currentPlayer === 'X' ? 'turn' : ''}`}>
+//           <div className="player-symbol">X</div>
+//           <div className="player-info">
+//             <div className="player-name">{gameState.players?.[0]?.name || 'Player X'}</div>
+//             <div className="player-pieces">{gameState.placementCount?.X ?? 0}/3 placed</div>
+//           </div>
+//         </div>
+//         <div className={`player-card ${playerSymbol === 'O' ? 'active' : ''} ${gameState.currentPlayer === 'O' ? 'turn' : ''}`}>
+//           <div className="player-symbol">O</div>
+//           <div className="player-info">
+//             <div className="player-name">{isVsAI ? '🤖 AI Bot' : (opponent?.name || 'Waiting...')}</div>
+//             <div className="player-pieces">{gameState.placementCount?.O ?? 0}/3 placed</div>
+//           </div>
+//         </div>
+//       </div>
+
+//       {!gameState.gameOver && (gameState.players?.length ?? 0) < 2 && !isVsAI && (
+//         <div className="status-message waiting">
+//           <Users size={20} /> Waiting for opponent to join...
+//         </div>
+//       )}
+
+//       {!gameState.gameOver && ((gameState.players?.length ?? 0) === 2 || isVsAI) && (
+//         <div className={`status-message ${isMyTurn ? 'your-turn' : 'opponent-turn'}`}>
+//           {isMyTurn ? (
+//             <>
+//               <Play size={20} />
+//               Your turn • {isPlacing ? 'Place a piece' : 'Move along the roads'}
+//             </>
+//           ) : (
+//             <>
+//               <AlertCircle size={20} />
+//               {isVsAI ? "AI is thinking..." : "Opponent's turn"}
+//             </>
+//           )}
+//         </div>
+//       )}
+
+//       <GameBoard 
+//         gameState={gameState} 
+//         playerSymbol={playerSymbol}
+//         onMove={handleMove}
+//       />
+
+//       {gameState.gameOver && (
+//         <div className="game-over-overlay">
+//           <div className="game-over-content">
+//             {gameState.winner ? (
+//               <>
+//                 <div className={`winner-symbol symbol-${gameState.winner}`}>
+//                   {gameState.winner}
+//                 </div>
+//                 <h2 className="game-over-title">
+//                   {gameState.winner === playerSymbol ? 'You Win!' : (isVsAI ? 'AI Wins' : 'You Lose')}
+//                 </h2>
+//                 <p className="game-over-subtitle">
+//                   {gameState.winner === playerSymbol ? 'Excellent strategy!' : 'Better luck next time'}
+//                 </p>
+//               </>
+//             ) : (
+//               <>
+//                 <div className="draw-icon">⚡</div>
+//                 <h2 className="game-over-title">Draw</h2>
+//                 <p className="game-over-subtitle">No legal moves remaining</p>
+//               </>
+//             )}
+//             <div className="game-over-actions">
+//               <button className="btn btn-primary" onClick={handleReset}>Play Again</button>
+//               <button className="btn btn-secondary" onClick={onLeave}>Back to Menu</button>
+//             </div>
+//           </div>
+//         </div>
+//       )}
+//     </div>
+//   );
+// };
+
 const GameScreen = ({ roomId, playerName, playerSymbol, onLeave, isVsAI = false }) => {
   const [gameState, setGameState] = useState(null);
   const [soundEnabled, setSoundEnabled] = useState(true);
   const [copied, setCopied] = useState(false);
 
+  // ============= DEBUG LOGGING =============
+  console.log('🎮 GameScreen RENDER:', {
+    roomId,
+    playerSymbol,
+    gameStateExists: !!gameState,
+    boardExists: !!gameState?.board,
+    gameStateKeys: gameState ? Object.keys(gameState) : null,
+  });
+
   const handleMove = useCallback((move) => {
+    console.log('🎮 handleMove called:', move);
     gameService.makeMove(roomId, move);
   }, [roomId]);
 
   useEffect(() => {
-    if (!isVsAI || !gameState || gameState.gameOver || gameState.currentPlayer !== 'O') return;
+    console.log('🎮 GameScreen MOUNTED with roomId:', roomId);
+    return () => {
+      console.log('🎮 GameScreen UNMOUNTED for roomId:', roomId);
+    };
+  }, [roomId]);
+
+  useEffect(() => {
+    if (!isVsAI || !gameState || !gameState.board || gameState.gameOver || gameState.currentPlayer !== 'O') return;
     if (gameState.selected !== null) return;
 
     const timer = setTimeout(() => {
       const board = { ...gameState.board };
-      const isPlacing = gameState.placementCount.O < 3;
+      const isPlacing = (gameState.placementCount?.O ?? 0) < 3;
 
       if (isPlacing) {
         const bestPos = getBestPlacementMove(board, 'O');
@@ -238,12 +417,65 @@ const GameScreen = ({ roomId, playerName, playerSymbol, onLeave, isVsAI = false 
     return () => clearTimeout(timer);
   }, [gameState, isVsAI, handleMove]);
 
-  useEffect(() => {
-    const unsubscribe = gameService.subscribeToRoom(roomId, setGameState);
-    return unsubscribe;
-  }, [roomId]);
+  // useEffect(() => {
+  //   if (!roomId) {
+  //     console.log('🎮 No roomId, skipping subscription');
+  //     return;
+  //   }
 
-  const handleReset = () => gameService.resetGame(roomId);
+  //   console.log('🎮 Setting up subscription for room:', roomId);
+  //   const unsubscribe = gameService.subscribeToRoom(roomId, (data) => {
+  //     console.log('🎮 Subscription callback received data:', data);
+  //     console.log('🎮 Data.board exists?', !!data?.board);
+  //     setGameState(data);
+  //   });
+
+  //   return () => {
+  //     console.log('🎮 Cleaning up subscription for room:', roomId);
+  //     unsubscribe();
+  //   };
+  // }, [roomId]);
+
+  useEffect(() => {
+  if (!roomId) {
+    console.log('🎮 No roomId, skipping subscription');
+    return;
+  }
+
+  console.log('🎮 Setting up subscription for room:', roomId);
+  const unsubscribe = gameService.subscribeToRoom(roomId, (data) => {
+    console.log('🎮 Subscription callback received data:', data);
+    console.log('🎮 Data keys:', data ? Object.keys(data) : null);
+    console.log('🎮 Data.board exists?', !!data?.board);
+    
+    // TEMPORARY FIX: If board is missing, reconstruct it
+    if (data && !data.board) {
+      console.warn('⚠️ Board field missing! Reconstructing default board.');
+      data.board = {
+        1: null, 2: null, 3: null,
+        4: null, 5: null, 6: null,
+        7: null, 8: null, 9: null
+      };
+      // Ensure other required fields exist
+      if (!data.placementCount) data.placementCount = { X: 0, O: 0 };
+      if (!data.selected) data.selected = null;
+      if (data.gameOver === undefined) data.gameOver = false;
+      if (data.winner === undefined) data.winner = null;
+    }
+    
+    setGameState(data);
+  });
+
+  return () => {
+    console.log('🎮 Cleaning up subscription for room:', roomId);
+    unsubscribe();
+  };
+}, [roomId]);
+
+  const handleReset = () => {
+    console.log('🎮 Reset game requested');
+    gameService.resetGame(roomId);
+  };
 
   const copyRoomId = () => {
     navigator.clipboard.writeText(roomId);
@@ -251,11 +483,21 @@ const GameScreen = ({ roomId, playerName, playerSymbol, onLeave, isVsAI = false 
     setTimeout(() => setCopied(false), 2000);
   };
 
-  if (!gameState) return <div className="loading-screen">Loading game...</div>;
+  // ============= TEMPORARILY BYPASS LOADING CHECK TO DEBUG =============
+  // Comment out the loading guard to see if the board renders with data
+  // if (!gameState || !gameState.board) return <div className="loading-screen">Loading game...</div>;
 
-  const opponent = gameState.players.find(p => p.symbol !== playerSymbol);
+  // If we keep the guard, add a fallback after timeout
+  if (!gameState || !gameState.board) {
+    console.log('🎮 Rendering loading screen because gameState or board is missing');
+    return <div className="loading-screen">Loading game... (check console)</div>;
+  }
+
+  console.log('🎮 Rendering game UI with board');
+
+  const opponent = gameState.players?.find(p => p.symbol !== playerSymbol);
   const isMyTurn = gameState.currentPlayer === playerSymbol;
-  const isPlacing = gameState.placementCount[gameState.currentPlayer] < 3;
+  const isPlacing = (gameState.placementCount?.[gameState.currentPlayer] ?? 0) < 3;
 
   return (
     <div className="game-screen">
@@ -277,26 +519,26 @@ const GameScreen = ({ roomId, playerName, playerSymbol, onLeave, isVsAI = false 
         <div className={`player-card ${playerSymbol === 'X' ? 'active' : ''} ${gameState.currentPlayer === 'X' ? 'turn' : ''}`}>
           <div className="player-symbol">X</div>
           <div className="player-info">
-            <div className="player-name">{gameState.players[0].name}</div>
-            <div className="player-pieces">{gameState.placementCount.X}/3 placed</div>
+            <div className="player-name">{gameState.players?.[0]?.name || 'Player X'}</div>
+            <div className="player-pieces">{gameState.placementCount?.X ?? 0}/3 placed</div>
           </div>
         </div>
         <div className={`player-card ${playerSymbol === 'O' ? 'active' : ''} ${gameState.currentPlayer === 'O' ? 'turn' : ''}`}>
           <div className="player-symbol">O</div>
           <div className="player-info">
             <div className="player-name">{isVsAI ? '🤖 AI Bot' : (opponent?.name || 'Waiting...')}</div>
-            <div className="player-pieces">{gameState.placementCount.O}/3 placed</div>
+            <div className="player-pieces">{gameState.placementCount?.O ?? 0}/3 placed</div>
           </div>
         </div>
       </div>
 
-      {!gameState.gameOver && gameState.players.length < 2 && !isVsAI && (
+      {!gameState.gameOver && (gameState.players?.length ?? 0) < 2 && !isVsAI && (
         <div className="status-message waiting">
           <Users size={20} /> Waiting for opponent to join...
         </div>
       )}
 
-      {!gameState.gameOver && (gameState.players.length === 2 || isVsAI) && (
+      {!gameState.gameOver && ((gameState.players?.length ?? 0) === 2 || isVsAI) && (
         <div className={`status-message ${isMyTurn ? 'your-turn' : 'opponent-turn'}`}>
           {isMyTurn ? (
             <>
