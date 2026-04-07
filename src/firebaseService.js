@@ -162,57 +162,112 @@ export class FirebaseGameService {
     return unsubscribe;
   }
 
-  async makeMove(roomId, move) {
-    console.log(`🔥 makeMove: Room ${roomId}, move:`, move);
-    const roomRef = ref(database, `rooms/${roomId}`);
-    const snapshot = await get(roomRef);
-    if (!snapshot.exists()) return;
+//   async makeMove(roomId, move) {
+//     console.log(`🔥 makeMove: Room ${roomId}, move:`, move);
+//     const roomRef = ref(database, `rooms/${roomId}`);
+//     const snapshot = await get(roomRef);
+//     if (!snapshot.exists()) return;
 
-    const room = snapshot.val();
-    ensureRoomFields(room);
+//     const room = snapshot.val();
+//     ensureRoomFields(room);
 
-    const { board, placementCount, currentPlayer } = room;
-    const isPlacing = placementCount[currentPlayer] < 3;
+//     const { board, placementCount, currentPlayer } = room;
+//     const isPlacing = placementCount[currentPlayer] < 3;
 
-    if (isPlacing && move.type === 'place') {
-      if (board[move.position] === null) {
-        board[move.position] = currentPlayer;
-        placementCount[currentPlayer]++;
-        room.selected = null;
+//     if (isPlacing && move.type === 'place') {
+//       if (board[move.position] === null) {
+//         board[move.position] = currentPlayer;
+//         placementCount[currentPlayer]++;
+//         room.selected = null;
 
-        if (checkWin(board, currentPlayer)) {
-          room.gameOver = true;
-          room.winner = currentPlayer;
-        } else {
-          room.currentPlayer = currentPlayer === 'X' ? 'O' : 'X';
-        }
+//         if (checkWin(board, currentPlayer)) {
+//           room.gameOver = true;
+//           room.winner = currentPlayer;
+//         } else {
+//           room.currentPlayer = currentPlayer === 'X' ? 'O' : 'X';
+//         }
+//       }
+//     } else if (!isPlacing && move.type === 'select') {
+//       room.selected = move.position;
+//     } else if (!isPlacing && move.type === 'move') {
+//       if (room.selected && board[move.position] === null && ADJ[room.selected].includes(move.position)) {
+//         board[room.selected] = null;
+//         board[move.position] = currentPlayer;
+//         room.selected = null;
+
+//         if (checkWin(board, currentPlayer)) {
+//           room.gameOver = true;
+//           room.winner = currentPlayer;
+//         } else {
+//           const nextPlayer = currentPlayer === 'X' ? 'O' : 'X';
+//           room.currentPlayer = nextPlayer;
+
+//           if (placementCount[nextPlayer] >= 3 && !hasLegalMove(board, nextPlayer)) {
+//             room.gameOver = true;
+//             room.winner = null;
+//           }
+//         }
+//       }
+//     }
+
+//     await set(roomRef, room);
+//     console.log(`🔥 makeMove: Move applied, currentPlayer now: ${room.currentPlayer}`);
+//   }
+
+async makeMove(roomId, move) {
+  console.log(`🔥 makeMove: Room ${roomId}, move:`, move);
+  const roomRef = ref(database, `rooms/${roomId}`);
+  const snapshot = await get(roomRef);
+  if (!snapshot.exists()) return;
+
+  const room = snapshot.val();
+  ensureRoomFields(room);
+
+  const { board, placementCount, currentPlayer } = room;
+  const isPlacing = placementCount[currentPlayer] < 3;
+
+  if (isPlacing && move.type === 'place') {
+    if (board[move.position] === null) {
+      board[move.position] = currentPlayer;
+      placementCount[currentPlayer]++;
+      room.selected = null;
+
+      if (checkWin(board, currentPlayer)) {
+        room.gameOver = true;
+        room.winner = currentPlayer;
+      } else {
+        room.currentPlayer = currentPlayer === 'X' ? 'O' : 'X';
       }
-    } else if (!isPlacing && move.type === 'select') {
-      room.selected = move.position;
-    } else if (!isPlacing && move.type === 'move') {
-      if (room.selected && board[move.position] === null && ADJ[room.selected].includes(move.position)) {
-        board[room.selected] = null;
-        board[move.position] = currentPlayer;
-        room.selected = null;
+    }
+  } else if (!isPlacing && move.type === 'select') {
+    room.selected = move.position;
+  } else if (!isPlacing && move.type === 'move') {
+    if (room.selected && board[move.position] === null && ADJ[room.selected].includes(move.position)) {
+      board[room.selected] = null;
+      board[move.position] = currentPlayer;
+      room.selected = null;
 
-        if (checkWin(board, currentPlayer)) {
-          room.gameOver = true;
-          room.winner = currentPlayer;
-        } else {
-          const nextPlayer = currentPlayer === 'X' ? 'O' : 'X';
-          room.currentPlayer = nextPlayer;
+      if (checkWin(board, currentPlayer)) {
+        room.gameOver = true;
+        room.winner = currentPlayer;
+      } else {
+        const nextPlayer = currentPlayer === 'X' ? 'O' : 'X';
+        room.currentPlayer = nextPlayer;
 
-          if (placementCount[nextPlayer] >= 3 && !hasLegalMove(board, nextPlayer)) {
-            room.gameOver = true;
-            room.winner = null;
-          }
+        // 🔄 FORCED REPLAY RULE
+        // If the next player has already placed 3 pieces and has no legal moves,
+        // keep the turn with the current player (they must move again).
+        if (placementCount[nextPlayer] >= 3 && !hasLegalMove(board, nextPlayer)) {
+          room.currentPlayer = currentPlayer; // Give turn back
+          console.log(`🔄 Next player (${nextPlayer}) has no legal moves. ${currentPlayer} plays again.`);
         }
       }
     }
-
-    await set(roomRef, room);
-    console.log(`🔥 makeMove: Move applied, currentPlayer now: ${room.currentPlayer}`);
   }
+
+  await set(roomRef, room);
+  console.log(`🔥 makeMove: Move applied, currentPlayer now: ${room.currentPlayer}`);
+}
 
   async resetGame(roomId) {
     const roomRef = ref(database, `rooms/${roomId}`);
