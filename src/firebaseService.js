@@ -145,83 +145,180 @@ export class FirebaseGameService {
     return unsubscribe;
   }
 
-  async makeMove(roomId, move) {
-    console.log(`🔥 makeMove: Room ${roomId}, move:`, move);
-    const roomRef = ref(database, `rooms/${roomId}`);
-    const snapshot = await get(roomRef);
-    if (!snapshot.exists()) {
-      console.error(`🔥 makeMove: Room ${roomId} not found`);
-      return;
+//   async makeMove(roomId, move) {
+//     console.log(`🔥 makeMove: Room ${roomId}, move:`, move);
+//     const roomRef = ref(database, `rooms/${roomId}`);
+//     const snapshot = await get(roomRef);
+//     if (!snapshot.exists()) {
+//       console.error(`🔥 makeMove: Room ${roomId} not found`);
+//       return;
+//     }
+
+//     const room = snapshot.val();
+//     const { board, placementCount, currentPlayer } = room;
+//     const isPlacing = placementCount[currentPlayer] < 3;
+
+//     if (isPlacing && move.type === 'place') {
+//       if (board[move.position] === null) {
+//         board[move.position] = currentPlayer;
+//         placementCount[currentPlayer]++;
+//         room.selected = null;
+
+//         if (checkWin(board, currentPlayer)) {
+//           room.gameOver = true;
+//           room.winner = currentPlayer;
+//         } else {
+//           room.currentPlayer = currentPlayer === 'X' ? 'O' : 'X';
+//         }
+//       }
+//     } else if (!isPlacing && move.type === 'select') {
+//       room.selected = move.position;
+//     } else if (!isPlacing && move.type === 'move') {
+//       if (room.selected && board[move.position] === null && ADJ[room.selected].includes(move.position)) {
+//         board[room.selected] = null;
+//         board[move.position] = currentPlayer;
+//         room.selected = null;
+
+//         if (checkWin(board, currentPlayer)) {
+//           room.gameOver = true;
+//           room.winner = currentPlayer;
+//         } else {
+//           const nextPlayer = currentPlayer === 'X' ? 'O' : 'X';
+//           room.currentPlayer = nextPlayer;
+
+//           if (placementCount[nextPlayer] >= 3 && !hasLegalMove(board, nextPlayer)) {
+//             room.gameOver = true;
+//             room.winner = null;
+//           }
+//         }
+//       }
+//     }
+
+//     try {
+//       await set(roomRef, room);
+//       console.log(`🔥 makeMove: Move applied successfully`);
+//     } catch (error) {
+//       console.error(`🔥 makeMove: Failed to update room:`, error);
+//     }
+//   }
+
+async makeMove(roomId, move) {
+  console.log(`🔥 makeMove: Room ${roomId}, move:`, move);
+  const roomRef = ref(database, `rooms/${roomId}`);
+  const snapshot = await get(roomRef);
+  if (!snapshot.exists()) {
+    console.error(`🔥 makeMove: Room ${roomId} not found`);
+    return;
+  }
+
+  const room = snapshot.val();
+  
+  // FIX: If board is missing (Firebase didn't store it), reconstruct
+  if (!room.board) {
+    console.warn('🔥 makeMove: board missing, reconstructing default');
+    room.board = {
+      1: null, 2: null, 3: null,
+      4: null, 5: null, 6: null,
+      7: null, 8: null, 9: null
+    };
+    if (!room.placementCount) room.placementCount = { X: 0, O: 0 };
+    if (!room.selected) room.selected = null;
+    if (room.gameOver === undefined) room.gameOver = false;
+    if (room.winner === undefined) room.winner = null;
+  }
+
+  const { board, placementCount, currentPlayer } = room;
+  const isPlacing = placementCount[currentPlayer] < 3;
+
+  if (isPlacing && move.type === 'place') {
+    if (board[move.position] === null) {
+      board[move.position] = currentPlayer;
+      placementCount[currentPlayer]++;
+      room.selected = null;
+
+      if (checkWin(board, currentPlayer)) {
+        room.gameOver = true;
+        room.winner = currentPlayer;
+      } else {
+        room.currentPlayer = currentPlayer === 'X' ? 'O' : 'X';
+      }
     }
+  } else if (!isPlacing && move.type === 'select') {
+    room.selected = move.position;
+  } else if (!isPlacing && move.type === 'move') {
+    if (room.selected && board[move.position] === null && ADJ[room.selected].includes(move.position)) {
+      board[room.selected] = null;
+      board[move.position] = currentPlayer;
+      room.selected = null;
 
-    const room = snapshot.val();
-    const { board, placementCount, currentPlayer } = room;
-    const isPlacing = placementCount[currentPlayer] < 3;
+      if (checkWin(board, currentPlayer)) {
+        room.gameOver = true;
+        room.winner = currentPlayer;
+      } else {
+        const nextPlayer = currentPlayer === 'X' ? 'O' : 'X';
+        room.currentPlayer = nextPlayer;
 
-    if (isPlacing && move.type === 'place') {
-      if (board[move.position] === null) {
-        board[move.position] = currentPlayer;
-        placementCount[currentPlayer]++;
-        room.selected = null;
-
-        if (checkWin(board, currentPlayer)) {
+        if (placementCount[nextPlayer] >= 3 && !hasLegalMove(board, nextPlayer)) {
           room.gameOver = true;
-          room.winner = currentPlayer;
-        } else {
-          room.currentPlayer = currentPlayer === 'X' ? 'O' : 'X';
+          room.winner = null;
         }
       }
-    } else if (!isPlacing && move.type === 'select') {
-      room.selected = move.position;
-    } else if (!isPlacing && move.type === 'move') {
-      if (room.selected && board[move.position] === null && ADJ[room.selected].includes(move.position)) {
-        board[room.selected] = null;
-        board[move.position] = currentPlayer;
-        room.selected = null;
-
-        if (checkWin(board, currentPlayer)) {
-          room.gameOver = true;
-          room.winner = currentPlayer;
-        } else {
-          const nextPlayer = currentPlayer === 'X' ? 'O' : 'X';
-          room.currentPlayer = nextPlayer;
-
-          if (placementCount[nextPlayer] >= 3 && !hasLegalMove(board, nextPlayer)) {
-            room.gameOver = true;
-            room.winner = null;
-          }
-        }
-      }
-    }
-
-    try {
-      await set(roomRef, room);
-      console.log(`🔥 makeMove: Move applied successfully`);
-    } catch (error) {
-      console.error(`🔥 makeMove: Failed to update room:`, error);
     }
   }
 
-  async resetGame(roomId) {
-    console.log(`🔥 resetGame: Resetting room ${roomId}`);
-    const roomRef = ref(database, `rooms/${roomId}`);
-    const snapshot = await get(roomRef);
-    if (!snapshot.exists()) {
-      console.error(`🔥 resetGame: Room not found`);
-      return;
-    }
-
-    const room = snapshot.val();
-    room.board = Object.fromEntries([...Array(9)].map((_, i) => [i + 1, null]));
-    room.placementCount = { X: 0, O: 0 };
-    room.currentPlayer = 'X';
-    room.selected = null;
-    room.gameOver = false;
-    room.winner = null;
-
+  try {
     await set(roomRef, room);
-    console.log(`🔥 resetGame: Room reset`);
+    console.log(`🔥 makeMove: Move applied successfully`);
+  } catch (error) {
+    console.error(`🔥 makeMove: Failed to update room:`, error);
   }
+}
+
+//   async resetGame(roomId) {
+//     console.log(`🔥 resetGame: Resetting room ${roomId}`);
+//     const roomRef = ref(database, `rooms/${roomId}`);
+//     const snapshot = await get(roomRef);
+//     if (!snapshot.exists()) {
+//       console.error(`🔥 resetGame: Room not found`);
+//       return;
+//     }
+
+//     const room = snapshot.val();
+//     room.board = Object.fromEntries([...Array(9)].map((_, i) => [i + 1, null]));
+//     room.placementCount = { X: 0, O: 0 };
+//     room.currentPlayer = 'X';
+//     room.selected = null;
+//     room.gameOver = false;
+//     room.winner = null;
+
+//     await set(roomRef, room);
+//     console.log(`🔥 resetGame: Room reset`);
+//   }
+
+async resetGame(roomId) {
+  console.log(`🔥 resetGame: Resetting room ${roomId}`);
+  const roomRef = ref(database, `rooms/${roomId}`);
+  const snapshot = await get(roomRef);
+  if (!snapshot.exists()) {
+    console.error(`🔥 resetGame: Room not found`);
+    return;
+  }
+
+  const room = snapshot.val();
+  room.board = {
+    1: null, 2: null, 3: null,
+    4: null, 5: null, 6: null,
+    7: null, 8: null, 9: null
+  };
+  room.placementCount = { X: 0, O: 0 };
+  room.currentPlayer = 'X';
+  room.selected = null;
+  room.gameOver = false;
+  room.winner = null;
+
+  await set(roomRef, room);
+  console.log(`🔥 resetGame: Room reset`);
+}
 }
 
 export const gameService = new FirebaseGameService();
