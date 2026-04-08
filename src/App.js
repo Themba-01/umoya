@@ -141,15 +141,12 @@ const GameBoard = ({ gameState, playerSymbol, onMove }) => {
     }
   };
 
+  // Convert absolute coordinates to percentages for responsive scaling
   const getPositionStyle = (pos) => {
     const { x, y } = POS[pos];
-    const baseSize = 620;
-    const containerSize = window.innerWidth < 640 ? 500 : baseSize;
-    const scale = containerSize / baseSize;
-
     return {
-      left: `${x * scale}px`,
-      top: `${y * scale}px`,
+      left: `${(x / 620) * 100}%`,
+      top: `${(y / 620) * 100}%`,
     };
   };
 
@@ -158,7 +155,16 @@ const GameBoard = ({ gameState, playerSymbol, onMove }) => {
       <svg
         className="board-lines"
         viewBox="0 0 620 620"
-        style={{ backgroundColor: 'rgba(234, 179, 8, 0.2)' }}
+        preserveAspectRatio="none"
+        style={{
+          position: 'absolute',
+          top: 0,
+          left: 0,
+          width: '100%',
+          height: '100%',
+          pointerEvents: 'none',
+          backgroundColor: 'rgba(234, 179, 8, 0.2)'
+        }}
       >
         <line x1="110" y1="140" x2="510" y2="140" stroke="#67e8f9" strokeWidth="28" strokeLinecap="round" />
         <line x1="110" y1="290" x2="510" y2="290" stroke="#67e8f9" strokeWidth="28" strokeLinecap="round" />
@@ -640,9 +646,40 @@ export default function AlignmentGame() {
         .status-message.opponent-turn { color: var(--text-secondary); }
         .status-message.waiting { color: var(--text-secondary); }
 
-        .game-board-container { position: relative; width: 100%; max-width: 620px; height: 620px; margin: 0 auto; flex: 1; display: flex; align-items: center; justify-content: center; }
-        .board-lines { position: absolute; top: 0; left: 50%; transform: translateX(-50%); width: 100%; max-width: 620px; height: 620px; pointer-events: none; z-index: 1; }
-        .board-position { position: absolute; width: 76px; height: 76px; border-radius: 50%; background: var(--bg-secondary); border: 3px solid var(--border-color); cursor: pointer; transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); transform: translate(-50%, -50%); display: flex; align-items: center; justify-content: center; z-index: 2; }
+        .game-board-container {
+          position: relative;
+          width: 100%;
+          max-width: 620px;
+          aspect-ratio: 1 / 1;
+          margin: 0 auto;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+        }
+        .board-lines {
+          position: absolute;
+          top: 0;
+          left: 0;
+          width: 100%;
+          height: 100%;
+          pointer-events: none;
+          background-color: rgba(234, 179, 8, 0.2);
+        }
+        .board-position {
+          position: absolute;
+          width: 76px;
+          height: 76px;
+          border-radius: 50%;
+          background: var(--bg-secondary);
+          border: 3px solid var(--border-color);
+          cursor: pointer;
+          transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+          transform: translate(-50%, -50%);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          z-index: 2;
+        }
         .board-position:disabled { cursor: not-allowed; opacity: 0.7; }
         .board-position.clickable:not(:disabled):hover { transform: translate(-50%, -50%) scale(1.1); border-color: var(--accent-blue); box-shadow: 0 0 24px rgba(59, 130, 246, 0.4); }
         .board-position.selected { border-color: #fbbf24; border-width: 4px; box-shadow: 0 0 32px rgba(251, 191, 36, 0.5); animation: selectedPulse 1.5s ease-in-out infinite; }
@@ -670,8 +707,6 @@ export default function AlignmentGame() {
         .game-over-actions { display: flex; flex-direction: column; gap: 0.75rem; }
 
         @media (max-width: 640px) {
-          .game-board-container { height: 500px; max-width: 500px; }
-          .board-lines { max-width: 500px; height: 500px; }
           .board-position { width: 64px; height: 64px; }
           .piece-content { font-size: 1.75rem; }
           .logo-title { font-size: 2.5rem; }
