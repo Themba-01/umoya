@@ -23,54 +23,220 @@ const checkWin = (board, player) => {
   return WINNING_LINES.some(line => line.every(p => board[p] === player));
 };
 
-// ============= AI LOGIC =============
-const minimax = (board, depth, isMaximizing, aiPlayer, humanPlayer) => {
-  if (checkWin(board, aiPlayer)) return 10 - depth;
-  if (checkWin(board, humanPlayer)) return depth - 10;
-  if (!Object.values(board).includes(null)) return 0;
+// ============= ENHANCED AI LOGIC (HARD MODE) =============
 
-  if (isMaximizing) {
-    let bestScore = -Infinity;
-    for (let p = 1; p <= 9; p++) {
-      if (board[p] === null) {
-        board[p] = aiPlayer;
-        const score = minimax(board, depth + 1, false, aiPlayer, humanPlayer);
-        board[p] = null;
-        bestScore = Math.max(score, bestScore);
+// Heuristic weights for positional evaluation
+const POSITION_WEIGHTS = {
+  5: 10,   // center
+  2: 8, 4: 8, 6: 8, 8: 8,  // edges adjacent to center
+  1: 5, 3: 5, 7: 5, 9: 5   // corners
+};
+
+// Check if a player has any legal move (for evaluation purposes)
+const hasLegalMoveForPlayer = (board, player) => {
+  for (let p = 1; p <= 9; p++) {
+    if (board[p] === player) {
+      for (let adj of ADJ[p]) {
+        if (board[adj] === null) return true;
       }
     }
-    return bestScore;
+  }
+  return false;
+};
+
+// Count how many legal moves a player has
+const countLegalMoves = (board, player) => {
+  let count = 0;
+  for (let from = 1; from <= 9; from++) {
+    if (board[from] === player) {
+      for (let to of ADJ[from]) {
+        if (board[to] === null) count++;
+      }
+    }
+  }
+  return count;
+};
+
+// Enhanced evaluation function: returns a score from the perspective of the AI player
+const evaluateBoard = (board, aiPlayer, humanPlayer, placementCount) => {
+  // Terminal states
+  if (checkWin(board, aiPlayer)) return 1000;
+  if (checkWin(board, humanPlayer)) return -1000;
+
+  let score = 0;
+  const aiPieces = [];
+  const humanPieces = [];
+
+  for (let p = 1; p <= 9; p++) {
+    if (board[p] === aiPlayer) aiPieces.push(p);
+    else if (board[p] === humanPlayer) humanPieces.push(p);
+  }
+
+  // Positional advantage
+  aiPieces.forEach(pos => score += POSITION_WEIGHTS[pos] || 0);
+  humanPieces.forEach(pos => score -= POSITION_WEIGHTS[pos] || 0);
+
+  // Mobility advantage
+  const aiMoves = countLegalMoves(board, aiPlayer);
+  const humanMoves = countLegalMoves(board, humanPlayer);
+  score += aiMoves * 2 - humanMoves * 2;
+
+  // Piece count advantage during placement phase
+  const aiCount = placementCount[aiPlayer] || 0;
+  const humanCount = placementCount[humanPlayer] || 0;
+  if (aiCount < 3) score += aiCount * 10;
+  if (humanCount < 3) score -= humanCount * 10;
+
+  return score;
+};
+
+// Generate all legal moves for a player (placement or sliding)
+const generateAllMoves = (board, player, placementCount) => {
+  const moves = [];
+  const isPlacing = (placementCount[player] || 0) < 3;
+
+  if (isPlacing) {
+    for (let p = 1; p <= 9; p++) {
+      if (board[p] === null) {
+        moves.push({ type: 'place', position: p });
+      }
+    }
   } else {
-    let bestScore = Infinity;
-    for (let p = 1; p <= 9; p++) {
-      if (board[p] === null) {
-        board[p] = humanPlayer;
-        const score = minimax(board, depth + 1, true, aiPlayer, humanPlayer);
-        board[p] = null;
-        bestScore = Math.min(score, bestScore);
+    for (let from = 1; from <= 9; from++) {
+      if (board[from] === player) {
+        for (let to of ADJ[from]) {
+          if (board[to] === null) {
+            moves.push({ type: 'move', from, to });
+          }
+        }
       }
     }
-    return bestScore;
+  }
+  return moves;
+};
+
+// Apply a move to a board and placementCount (mutates objects)
+const applyMove = (board, move, player, placementCount) => {
+  if (move.type === 'place') {
+    board[move.position] = player;
+    placementCount[player] = (placementCount[player] || 0) + 1;
+  } else if (move.type === 'move') {
+    board[move.from] = null;
+    board[move.to] = player;
+    // placementCount unchanged
   }
 };
 
-const getBestPlacementMove = (board, player) => {
-  let bestScore = -Infinity;
-  let bestPos = null;
-  const opponent = player === 'X' ? 'O' : 'X';
+// Alpha-beta search with forced replay handling
+const alphaBeta = (
+  board,
+  depth,
+  alpha,
+  beta,
+  isMaximizing,
+  aiPlayer,
+  humanPlayer,
+  placementCount,
+  maxDepth = 10
+) => {
+  // Terminal checks
+  if (checkWin(board, aiPlayer)) return 1000 - depth;
+  if (checkWin(board, humanPlayer)) return -1000 + depth;
 
-  for (let p = 1; p <= 9; p++) {
-    if (board[p] === null) {
-      board[p] = player;
-      const score = minimax(board, 0, false, player, opponent);
-      board[p] = null;
-      if (score > bestScore) {
-        bestScore = score;
-        bestPos = p;
-      }
+  const currentPlayer = isMaximizing ? aiPlayer : humanPlayer;
+
+  // If no moves for current player and placement phase is over, game would end or force replay.
+  // In evaluation, treat as draw (0) to avoid overestimating.
+  if (placementCount[currentPlayer] >= 3 && !hasLegalMoveForPlayer(board, currentPlayer)) {
+    return 0;
+  }
+
+  if (depth >= maxDepth) {
+    return evaluateBoard(board, aiPlayer, humanPlayer, placementCount);
+  }
+
+  if (isMaximizing) {
+    let maxEval = -Infinity;
+    const moves = generateAllMoves(board, aiPlayer, placementCount);
+    if (moves.length === 0) return evaluateBoard(board, aiPlayer, humanPlayer, placementCount);
+    for (const move of moves) {
+      const newBoard = { ...board };
+      const newPlacement = { ...placementCount };
+      applyMove(newBoard, move, aiPlayer, newPlacement);
+      const evalScore = alphaBeta(
+        newBoard,
+        depth + 1,
+        alpha,
+        beta,
+        false,
+        aiPlayer,
+        humanPlayer,
+        newPlacement,
+        maxDepth
+      );
+      maxEval = Math.max(maxEval, evalScore);
+      alpha = Math.max(alpha, evalScore);
+      if (beta <= alpha) break;
+    }
+    return maxEval;
+  } else {
+    let minEval = Infinity;
+    const moves = generateAllMoves(board, humanPlayer, placementCount);
+    if (moves.length === 0) return evaluateBoard(board, aiPlayer, humanPlayer, placementCount);
+    for (const move of moves) {
+      const newBoard = { ...board };
+      const newPlacement = { ...placementCount };
+      applyMove(newBoard, move, humanPlayer, newPlacement);
+      const evalScore = alphaBeta(
+        newBoard,
+        depth + 1,
+        alpha,
+        beta,
+        true,
+        aiPlayer,
+        humanPlayer,
+        newPlacement,
+        maxDepth
+      );
+      minEval = Math.min(minEval, evalScore);
+      beta = Math.min(beta, evalScore);
+      if (beta <= alpha) break;
+    }
+    return minEval;
+  }
+};
+
+// Get the best move for AI using alpha-beta (hard difficulty)
+const getBestMove = (board, aiPlayer, humanPlayer, placementCount) => {
+  const isPlacing = (placementCount[aiPlayer] || 0) < 3;
+  let bestScore = -Infinity;
+  let bestMove = null;
+
+  const moves = generateAllMoves(board, aiPlayer, placementCount);
+  if (moves.length === 0) return null;
+
+  for (const move of moves) {
+    const newBoard = { ...board };
+    const newPlacement = { ...placementCount };
+    applyMove(newBoard, move, aiPlayer, newPlacement);
+    const score = alphaBeta(
+      newBoard,
+      0,
+      -Infinity,
+      Infinity,
+      false,
+      aiPlayer,
+      humanPlayer,
+      newPlacement,
+      10 // full depth search for hard mode
+    );
+    if (score > bestScore) {
+      bestScore = score;
+      bestMove = move;
     }
   }
-  return bestPos;
+
+  return bestMove;
 };
 
 // ============= COMPONENTS =============
@@ -248,42 +414,28 @@ const GameScreen = ({ roomId, playerName, playerSymbol, onLeave, isVsAI = false 
     };
   }, [roomId]);
 
-  // AI move effect (for vs AI games)
+  // AI move effect (for vs AI games) - uses enhanced alpha-beta AI
   useEffect(() => {
     if (!isVsAI || !gameState || !gameState.board || gameState.gameOver || gameState.currentPlayer !== 'O') return;
     if (gameState.selected !== null) return;
 
     const timer = setTimeout(() => {
       const board = { ...gameState.board };
-      const isPlacing = (gameState.placementCount?.O ?? 0) < 3;
+      const placementCount = { ...gameState.placementCount };
+      const aiPlayer = 'O';
+      const humanPlayer = 'X';
 
-      if (isPlacing) {
-        const bestPos = getBestPlacementMove(board, 'O');
-        if (bestPos) handleMove({ type: 'place', position: bestPos });
-      } else {
-        let bestScore = -Infinity;
-        let bestFrom = null;
-        let bestTo = null;
+      const bestMove = getBestMove(board, aiPlayer, humanPlayer, placementCount);
+      if (!bestMove) return;
 
-        for (let from = 1; from <= 9; from++) {
-          if (board[from] !== 'O') continue;
-          for (let to of ADJ[from]) {
-            if (board[to] !== null) continue;
-            const tempBoard = { ...board };
-            tempBoard[from] = null;
-            tempBoard[to] = 'O';
-            const score = minimax(tempBoard, 0, false, 'O', 'X');
-            if (score > bestScore) {
-              bestScore = score;
-              bestFrom = from;
-              bestTo = to;
-            }
-          }
-        }
-        if (bestFrom && bestTo) {
-          handleMove({ type: 'select', position: bestFrom });
-          setTimeout(() => handleMove({ type: 'move', position: bestTo }), 80);
-        }
+      if (bestMove.type === 'place') {
+        handleMove({ type: 'place', position: bestMove.position });
+      } else if (bestMove.type === 'move') {
+        // Simulate two-step UI: select then move
+        handleMove({ type: 'select', position: bestMove.from });
+        setTimeout(() => {
+          handleMove({ type: 'move', position: bestMove.to });
+        }, 80);
       }
     }, 650);
 
@@ -519,7 +671,7 @@ const MenuScreen = ({ onCreateRoom, onJoinRoom, onSolo }) => {
             <li>First to make a straight line of 3 wins!</li>
           </ol>
           <p style={{marginTop: '1rem', fontSize: '0.85rem', color: '#a1a9c3'}}>
-            The glowing roads are now visible
+            
           </p>
         </div>
       </div>
