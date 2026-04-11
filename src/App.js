@@ -93,9 +93,8 @@ const evaluateBoard = (board, aiPlayer, humanPlayer, placementCount) => {
 // Generate all legal moves for a player (placement or sliding)
 const generateAllMoves = (board, player, placementCount) => {
   const moves = [];
-  const isPlacing = (placementCount[player] || 0) < 3;
-
-  if (isPlacing) {
+  // Determine if player is still placing pieces
+  if ((placementCount[player] || 0) < 3) {
     for (let p = 1; p <= 9; p++) {
       if (board[p] === null) {
         moves.push({ type: 'place', position: p });
@@ -208,7 +207,6 @@ const alphaBeta = (
 
 // Get the best move for AI using alpha-beta (hard difficulty)
 const getBestMove = (board, aiPlayer, humanPlayer, placementCount) => {
-  const isPlacing = (placementCount[aiPlayer] || 0) < 3;
   let bestScore = -Infinity;
   let bestMove = null;
 
