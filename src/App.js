@@ -479,7 +479,7 @@ const GameScreen = ({ roomId, playerName, playerSymbol, onLeave, isVsAI = false 
 
   if (!gameState || !gameState.board) {
     console.log('🎮 Rendering loading screen because gameState or board is missing');
-    return <div className="loading-screen">Loading game... (check console)</div>;
+    return <div className="loading-screen">Loading game...</div>;
   }
 
   console.log('🎮 Rendering game UI with board');
